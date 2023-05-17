@@ -1,40 +1,8 @@
-" Copyright (c) 2015 Junegunn Choi
-"
-" MIT License
-"
-" Permission is hereby granted, free of charge, to any person obtaining
-" a copy of this software and associated documentation files (the
-" "Software"), to deal in the Software without restriction, including
-" without limitation the rights to use, copy, modify, merge, publish,
-" distribute, sublicense, and/or sell copies of the Software, and to
-" permit persons to whom the Software is furnished to do so, subject to
-" the following conditions:
-"
-" The above copyright notice and this permission notice shall be
-" included in all copies or substantial portions of the Software.
-"
-" THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-" EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-" MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-" NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-" LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-" OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-" WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 let s:cpo_save = &cpo
 set cpo&vim
 
 function! s:const(val, min, max)
   return min([max([a:val, a:min]), a:max])
-endfunction
-
-function! s:get_color(group, attr)
-  return synIDattr(synIDtrans(hlID(a:group)), a:attr)
-endfunction
-
-function! s:set_color(group, attr, color)
-  let gui = has('gui_running') || has('termguicolors') && &termguicolors
-  execute printf('hi %s %s%s=%s', a:group, gui ? 'gui' : 'cterm', a:attr, a:color)
 endfunction
 
 nnoremap <silent> <Plug>(goyo-off) :call <sid>goyo_off()<cr>
@@ -52,6 +20,7 @@ function! s:init_pad(command)
 
   setlocal buftype=nofile bufhidden=wipe nomodifiable nobuflisted noswapfile
       \ nonu nocursorline nocursorcolumn winfixwidth winfixheight statusline=\ 
+  setfiletype goyo
   if exists('&rnu')
     setlocal nornu
   endif
@@ -70,7 +39,6 @@ function! s:setup_pad(bufnr, vert, size, repel)
   execute (a:vert ? 'vertical ' : '') . 'resize ' . max([0, a:size])
   augroup goyop
     execute 'autocmd WinEnter,CursorMoved <buffer> nested call s:blank("'.a:repel.'")'
-    autocmd WinLeave <buffer> call s:hide_statusline()
   augroup END
 
   " To hide scrollbars of pad windows in GVim
@@ -107,38 +75,6 @@ function! s:resize_pads()
   call s:setup_pad(t:goyo_pads.r, 1, hmargin - xoff, 'h')
 endfunction
 
-function! s:tranquilize()
-  let bg = s:get_color('Normal', 'bg#')
-  for grp in ['NonText', 'FoldColumn', 'ColorColumn', 'VertSplit',
-            \ 'StatusLine', 'StatusLineNC', 'SignColumn']
-    " -1 on Vim / '' on GVim
-    if bg == -1 || empty(bg)
-      call s:set_color(grp, 'fg', get(g:, 'goyo_bg', 'black'))
-      call s:set_color(grp, 'bg', 'NONE')
-    else
-      call s:set_color(grp, 'fg', bg)
-      call s:set_color(grp, 'bg', bg)
-    endif
-    call s:set_color(grp, '', 'NONE')
-  endfor
-endfunction
-
-function! s:hide_statusline()
-  setlocal statusline=\ 
-endfunction
-
-function! s:hide_linenr()
-  if !get(g:, 'goyo_linenr', 0)
-    setlocal nonu
-    if exists('&rnu')
-      setlocal nornu
-    endif
-  endif
-  if exists('&colorcolumn')
-    setlocal colorcolumn=
-  endif
-endfunction
-
 function! s:maps_nop()
   let mapped = filter(['R', 'H', 'J', 'K', 'L', '|', '_'],
                     \ "empty(maparg(\"\<c-w>\".v:val, 'n'))")
@@ -173,14 +109,12 @@ function! s:goyo_on(dim)
 
   let s:orig_tab = tabpagenr()
   let settings =
-    \ { 'laststatus':    &laststatus,
-    \   'showtabline':   &showtabline,
+    \ { 'showtabline':   &showtabline,
     \   'fillchars':     &fillchars,
     \   'winminwidth':   &winminwidth,
     \   'winwidth':      &winwidth,
     \   'winminheight':  &winminheight,
     \   'winheight':     &winheight,
-    \   'ruler':         &ruler,
     \   'sidescroll':    &sidescroll,
     \   'sidescrolloff': &sidescrolloff
     \ }
@@ -194,63 +128,18 @@ function! s:goyo_on(dim)
   let t:goyo_pads = {}
   let t:goyo_revert = settings
   let t:goyo_maps = extend(s:maps_nop(), s:maps_resize())
-  if has('gui_running')
-    let t:goyo_revert.guioptions = &guioptions
-  endif
 
-  " vim-gitgutter
-  let t:goyo_disabled_gitgutter = get(g:, 'gitgutter_enabled', 0)
-  if t:goyo_disabled_gitgutter
-    silent! GitGutterDisable
-  endif
-
-  " vim-signify
-  let t:goyo_disabled_signify = !empty(getbufvar(bufnr(''), 'sy'))
-  if t:goyo_disabled_signify
-    SignifyToggle
-  endif
-
-  " vim-airline
-  let t:goyo_disabled_airline = exists('#airline')
-  if t:goyo_disabled_airline
-    AirlineToggle
-  endif
-
-  " vim-powerline
-  let t:goyo_disabled_powerline = exists('#PowerlineMain')
-  if t:goyo_disabled_powerline
-    augroup PowerlineMain
-      autocmd!
-    augroup END
-    augroup! PowerlineMain
-  endif
-
-  " lightline.vim
-  let t:goyo_disabled_lightline = exists('#lightline')
-  if t:goyo_disabled_lightline
-    silent! call lightline#disable()
-  endif
-
-  call s:hide_linenr()
   " Global options
   let &winheight = max([&winminheight, 1])
   set winminheight=1
   set winheight=1
   set winminwidth=1 winwidth=1
-  set laststatus=0
   set showtabline=0
-  set noruler
   set fillchars+=vert:\ 
   set fillchars+=stl:\ 
   set fillchars+=stlnc:\ 
   set sidescroll=1
   set sidescrolloff=0
-
-  " Hide left-hand scrollbars
-  if has('gui_running')
-    set guioptions-=l
-    set guioptions-=L
-  endif
 
   let t:goyo_pads.l = s:init_pad('vertical topleft new')
   let t:goyo_pads.r = s:init_pad('vertical botright new')
@@ -258,24 +147,16 @@ function! s:goyo_on(dim)
   let t:goyo_pads.b = s:init_pad('botright new')
 
   call s:resize_pads()
-  call s:tranquilize()
 
   augroup goyo
     autocmd!
     autocmd TabLeave    * nested call s:goyo_off()
     autocmd VimResized  *        call s:resize_pads()
-    autocmd ColorScheme *        call s:tranquilize()
-    autocmd BufWinEnter *        call s:hide_linenr() | call s:hide_statusline()
-    autocmd WinEnter,WinLeave *  call s:hide_statusline()
     if has('nvim')
       autocmd TermClose * call feedkeys("\<plug>(goyo-resize)")
     endif
   augroup END
 
-  call s:hide_statusline()
-  if exists('g:goyo_callbacks[0]')
-    call g:goyo_callbacks[0]()
-  endif
   if exists('#User#GoyoEnter')
     doautocmd User GoyoEnter
   endif
@@ -306,11 +187,6 @@ function! s:goyo_off()
   endfor
 
   let goyo_revert             = t:goyo_revert
-  let goyo_disabled_gitgutter = t:goyo_disabled_gitgutter
-  let goyo_disabled_signify   = t:goyo_disabled_signify
-  let goyo_disabled_airline   = t:goyo_disabled_airline
-  let goyo_disabled_powerline = t:goyo_disabled_powerline
-  let goyo_disabled_lightline = t:goyo_disabled_lightline
   let goyo_orig_buffer        = t:goyo_master
   let [line, col]             = [line('.'), col('.')]
 
@@ -339,42 +215,7 @@ function! s:goyo_off()
   for [k, v] in items(goyo_revert)
     execute printf('let &%s = %s', k, string(v))
   endfor
-  execute 'colo '. get(g:, 'colors_name', 'default')
 
-  if goyo_disabled_gitgutter
-    silent! GitGutterEnable
-  endif
-
-  if goyo_disabled_signify
-    silent! if !b:sy.active
-      SignifyToggle
-    endif
-  endif
-
-  if goyo_disabled_airline && !exists('#airline')
-    AirlineToggle
-    " For some reason, Airline requires two refreshes to avoid display
-    " artifacts
-    silent! AirlineRefresh
-    silent! AirlineRefresh
-  endif
-
-  if goyo_disabled_powerline && !exists('#PowerlineMain')
-    doautocmd PowerlineStartup VimEnter
-    silent! PowerlineReloadColorscheme
-  endif
-
-  if goyo_disabled_lightline
-    silent! call lightline#enable()
-  endif
-
-  if exists('#Powerline')
-    doautocmd Powerline ColorScheme
-  endif
-
-  if exists('g:goyo_callbacks[1]')
-    call g:goyo_callbacks[1]()
-  endif
   if exists('#User#GoyoLeave')
     doautocmd User GoyoLeave
   endif
@@ -446,4 +287,3 @@ endfunction
 
 let &cpo = s:cpo_save
 unlet s:cpo_save
-
